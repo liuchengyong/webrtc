@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title></title>
+    <style>
+        *{
+            box-sizing: border-box;
+        }
+        html, body{
+            padding: 0;
+            margin: 0;
+            width: 100vw;
+            height: auto;
+            overflow: hidden;
+            overflow-y: scroll;
+        }
+        .btn-groups{
+            padding: 30px 15px;
+            width: 100%;
+        }
+        .btn-groups button{
+            padding: 0 10px;
+            margin: 15px 0 0;
+            line-height: 25px;
+        }
+        .container{
+            display: flex;
+            flex-wrap: wrap;
+        }
+        .container .wrapper{
+            padding: 0 15px;
+            width: 50%;
+        }
+        .container .wrapper video{
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        .container .wrapper canvas{
+            width: 100%;
+            height: auto;
+        }
+    </style>
+    <script src="./socket.io.js"></script>
+</head>
+<body>
+    <div class="btn-groups">
+        <button id="checkDevice">检测设备</button>
+        <button id="startLive">开始直播</button> 
+        <br />
+        <button id="takePhoto">截图</button>
+        <button id="savePhoto">保存截图</button>
+        <br />
+        <button id="takeRecord">开始录制</button>
+        <button id="playRecord">播放录制内容</button>
+        <button id="saveRecord">保存录制</button>
+        <br />
+        <button id="startDesktopLive">开始桌面直播</button>
+        <button id="playRecord">播放录制内容</button>
+    </div>
+    <div class="container">
+        <div class="wrapper">
+            <h3>原视频</h3>
+            <video autoplay playsinline id="liveVideo"></video>
+        </div>
+        <div class="wrapper">
+            <h3>视频截图</h3>
+            <canvas id="picture"></canvas>
+        </div>
+        <div class="wrapper">
+            <h3>录制视频播放</h3>
+            <video autoplay playsinline id="recordVideo" ></video>
+        </div>
+        <div class="wrapper">
+            <h3>桌面视频</h3>
+            <video autoplay playsinline id="desktopLiveVideo" ></video>
+        </div>
+    </div>
+    
+    <script>
+        
+        function checkDevice(){ // 检测设备
+            navigator.mediaDevices.enumerateDevices().then(deviceInfos=>{
+                deviceInfos.forEach(deviceInfo=> {
+                    console.log(deviceInfo.kind + ": " + deviceInfo.label + " id = " + deviceInfo.deviceId);
+                });
+            }).catch(err=> {
+                console.log(err.name + ": " + err.message);
+            });
+        }
+
+        function startWebRtc(){ // 开始直播
+            let liveVideo = document.getElementById('liveVideo');
+            const mediaStreamContrains = {
+                video: {
+                    frameRate: {min: 20},
+                    width: { min: 640, ideal: 1280 },
+                    height: { min: 360, ideal: 720 },
+                    aspectRatio: 16/9
+                },
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            };
+            navigator.mediaDevices.getUserMedia(mediaStreamContrains).then(mediaStream=>{
+                liveVideo.srcObject = mediaStream;
+            }).catch(error =>{
+                console.log(err.name + ": " + err.message);
+            });
+        }
+
+        function downloadFile(name,url){
+            let a = document.createElement("a");    
+            a.download = name;
+            a.href = url;    
+            document.body.appendChild(a);    
+            a.click();    
+            a.remove();
+        }
+
+        document.getElementById('checkDevice').onclick = ()=>{ // 检测设备
+            checkDevice();
+        }
+        document.getElementById('startLive').onclick = ()=>{ // 开始直播
+            startWebRtc();
+        }
+        document.getElementById('takePhoto').onclick = ()=>{ // 截图
+            let pictureCanvas = document.getElementById('picture');
+            let liveVideo = document.getElementById('liveVideo');
+            
+            picture.width = 1280;
+            picture.height = 720;
+            pictureCanvas.getContext('2d').drawImage(liveVideo, 0, 0, picture.width, picture.height);
+            let test = ()=>{
+                pictureCanvas.getContext('2d').drawImage(liveVideo, 0, 0, picture.width, picture.height);
+                requestAnimationFrame(test)
+            }
+            requestAnimationFrame(test)
+           
+        }
+
+        document.getElementById('savePhoto').onclick = ()=>{ // 保存图片
+            downloadFile('photo',picture.toDataURL("image/jpeg"))
+        }
+        
+        let buffer;
+        
+        document.getElementById('takeRecord').onclick = ()=>{ // 开始录制
+            buffer = [];  
+            //设置录制下来的多媒体格式         
+            let options = {               
+                 mimeType: 'video/webm;codecs=vp8'        
+            }       
+             //判断浏览器是否支持录制       
+            if(!MediaRecorder.isTypeSupported(options.mimeType)){                
+                console.error(`${options.mimeType} is not supported!`);               
+                return; 
+            } 
+            let mediaRecorder;       
+            try{    
+                //创建录制对象                
+                let liveVideo = document.getElementById('liveVideo');
+                mediaRecorder = new MediaRecorder(liveVideo.srcObject, options);        
+            }catch(e){                
+                console.error('Failed to create MediaRecorder:', e);              
+                return;       
+            }        
+            //当有音视频数据来了之后触发该事件        
+            mediaRecorder.ondataavailable = (e)=>{
+                if(e && e.data && e.data.size > 0){ 
+                    buffer.push(e.data); 
+                }
+            };        
+            //开始录制      
+            mediaRecorder.start(10);
+        }
+
+        document.getElementById('playRecord').onclick = ()=>{ // 播放录制
+            let recordVideo = document.getElementById('recordVideo');
+            let blob = new Blob(buffer, {type: 'video/webm'});
+            recordVideo.src = window.URL.createObjectURL(blob);
+            recordVideo.srcObject = null;
+            recordVideo.controls = true;
+            recordVideo.play();
+        }
+
+        document.getElementById('saveRecord').onclick = ()=>{ // 播放录制
+            let blob = new Blob(buffer, {type: 'video/webm'});
+            downloadFile('video',window.URL.createObjectURL(blob))
+        }
+        
+
+        document.getElementById('startDesktopLive').onclick = ()=>{
+            let desktopLiveVideo = document.getElementById('desktopLiveVideo');
+            navigator.mediaDevices.getDisplayMedia({ video: true}).then(stream=>{
+                desktopLiveVideo.srcObject = stream;
+            });
+        }
+    
+        
+
+        var isInitiator;
+
+        room = prompt('Enter room name:'); //弹出一个输入窗口
+
+        const socket = io({
+            auth:{
+                username: 'dasda'
+            }
+        }).connect(); //与服务端建立socket连接
+
+        if (room !== '') { //如果房间不空，则发送 "create or join" 消息
+            console.log('Joining room ' + room);
+            socket.emit('create or join', room);
+        }
+
+        socket.on('full', (room) => { //如果从服务端收到 "full" 消息
+            console.log('Room ' + room + ' is full');
+        });
+
+        socket.on('empty', (room) => { //如果从服务端收到 "empty" 消息
+            isInitiator = true;
+            console.log('Room ' + room + ' is empty');
+        });
+
+        socket.on('join', (room) => { //如果从服务端收到 “join" 消息
+            console.log('Making request to join room ' + room);
+            console.log('You are the initiator!');
+        });
+
+        socket.on('log', (array) => {
+            console.log.apply(console, array);
+        });
+
+        socket.on('created', (room) => { //如果从服务端收到 "empty" 消息
+            console.log('Room ' + room + ' is created');
+        });
+
+    </script>
+</body>
+</html>

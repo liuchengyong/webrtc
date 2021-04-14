@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title></title>
+    <style>
+        *{
+            box-sizing: border-box;
+        }
+        html, body{
+            padding: 0;
+            margin: 0;
+            width: 100vw;
+            height: auto;
+            overflow: hidden;
+            overflow-y: scroll;
+        }
+        .btn-groups{
+            padding: 30px 15px;
+            width: 100%;
+        }
+        .btn-groups button{
+            padding: 0 10px;
+            margin: 15px 0 0;
+            line-height: 25px;
+        }
+        .container{
+            display: flex;
+            flex-wrap: wrap;
+            padding: 15px 0;
+        }
+        .container .wrapper{
+            padding: 0 15px;
+            width: 50%;
+        }
+        .container .wrapper video{
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        .container .wrapper canvas{
+            width: 100%;
+            height: auto;
+        }
+    </style>
+    <script src="./socket.io.js"></script>
+</head>
+<body>
+    
+    <div class="container">
+        
+        <div class="wrapper">
+            <ul id="users"></ul>
+        </div>
+        <div class="wrapper">
+            user name: <input id="username" type="text" />
+            <button id="submitName">提交</button> <br/>
+            msg: <input id="msg" type="text" />
+            <button id="submitMsg">提交</button>
+            <ul id="msgs"></ul>
+        </div>
+    </div>
+
+   
+
+
+    <script>
+        let URL = "http://localhost:7777", msgList = [], userList = [], userId;
+        const socket = io(URL, { autoConnect: false });
+
+        function renderUserList(){
+            let list = [];
+            userList.forEach(item=>{
+                if(userId == item.userId) return;
+                list.push(`<li ><h4><input name="friend" type="radio" data-id="${item.userId}" />${item.userName}</h4><i>${item.userId}</i></li>`)
+            })
+            document.getElementById('users').innerHTML = list.join('')
+        }
+
+        function renderMsgList(){
+            let list = [];
+            msgList.forEach(item=>{
+                let user = userList.find(item1 => item1.userId == item.formId);
+                console.log(user)
+                list.push(`<li style="text-align: ${user.userId == userId ? 'right': 'left'};">${user.userName}:${item.content}</li>`)
+            })
+            document.getElementById('msgs').innerHTML = list.join('')
+        }
+
+        document.getElementById('submitName').onclick= ()=>{
+            let username = document.getElementById('username').value;
+            
+            socket.auth = { username };
+            socket.connect();
+            socket.on("users", (users) => {
+                userId = socket.id;
+                userList = users;
+                renderUserList();
+            })
+
+            socket.on("private message", (message) => {
+                msgList.push({
+                    ...message,
+                    toId: userId
+                })
+                renderMsgList();
+            })
+        }
+
+        document.getElementById('submitMsg').onclick = ()=> {
+            let content = document.getElementById('msg').value;
+            let toId = document.querySelector('input[type=radio][name=friend]:checked').dataset.id;
+            socket.emit("private message", {
+                content,
+                toId,
+            });
+            msgList.push({
+                content,
+                toId,
+                formId: userId
+            })
+            renderMsgList();
+        }
+
+        
+        document.getElementById('users').addEventListener('click',(e)=>{
+            let li = e.target.closest('li');
+        })
+
+        
+
+        
+    </script>
+</body>
+</html>
